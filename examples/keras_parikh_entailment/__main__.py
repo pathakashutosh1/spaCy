@@ -1,11 +1,13 @@
 from __future__ import division, unicode_literals, print_function
 import spacy
-
+import time
 import plac
 from pathlib import Path
 import ujson as json
 import numpy
 from keras.utils.np_utils import to_categorical
+from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
+# import sense2vec
 
 from spacy_hook import get_embeddings, get_word_ids
 from spacy_hook import create_similarity_pipeline
@@ -17,6 +19,8 @@ try:
 except ImportError:
     import pickle
 
+csv_path = '/home/ashutosh/trial/data/compare/compare_2.csv'
+csv_handle = file(csv_path, 'w')
 
 def train(train_loc, dev_loc, shape, settings):
     train_texts1, train_texts2, train_labels = read_snli(train_loc)
@@ -26,6 +30,7 @@ def train(train_loc, dev_loc, shape, settings):
     nlp = spacy.load('en')
     assert nlp.path is not None
     print("Compiling network")
+    # sense = sense2vec.load()
     model = build_model(get_embeddings(nlp.vocab), shape, settings)
     print("Processing texts...")
     Xs = []
@@ -35,6 +40,8 @@ def train(train_loc, dev_loc, shape, settings):
                          rnn_encode=settings['gru_encode'],
                          tree_truncate=settings['tree_truncate']))
     train_X1, train_X2, dev_X1, dev_X2 = Xs
+    print ("shape of train X1", train_X1.shape)
+    print("+"*40)
     print(settings)
     model.fit(
         [train_X1, train_X2],
@@ -58,13 +65,40 @@ def evaluate(dev_loc):
             create_pipeline=create_similarity_pipeline)
     total = 0.
     correct = 0.
+    label_array = []
+    predicted_array = []
+    print(','.join(["text1", "text2", "Predicted Label" , "Gold Label"]), file=csv_handle)
     for text1, text2, label in zip(dev_texts1, dev_texts2, dev_labels):
         doc1 = nlp(text1)
         doc2 = nlp(text2)
+
+        # print ("time")
+        # now = time.time()
         sim = doc1.similarity(doc2)
+        # print(time.time()-now)
+        # print ("SIM")
+        # print(sim)
+        print(','.join(['"'+text1+'"', '"'+text2+'"', str(sim.argmax()) , str(label.argmax())]), file=csv_handle)
+        # print ("values")
+        # print (label.argmax(), sim.argmax())
+        # print("labels")
+        # print(label)
+        label_array.append(label.argmax())
+        predicted_array.append(sim.argmax())
         if sim.argmax() == label.argmax():
             correct += 1
         total += 1
+
+    print("no of entries" , len(dev_texts1), len(dev_texts2))
+    stats = precision_recall_fscore_support(label_array, predicted_array)
+    matrix = confusion_matrix(label_array, predicted_array)
+    precision = stats[0][0]
+    recall = stats[1][0]
+    f_score = stats[2][0]
+    print ( "precision " + str(precision))
+    print ("recall " + str(recall))
+    print ("f_score " + str(f_score))
+    print (matrix)
     return correct, total
 
 
@@ -79,7 +113,8 @@ def demo():
     print("Similarity", doc1.similarity(doc2))
 
 
-LABELS = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
+# LABELS = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
+LABELS = {True: 1, False : 0}
 def read_snli(path):
     texts1 = []
     texts2 = []
@@ -90,9 +125,14 @@ def read_snli(path):
             label = eg['gold_label']
             if label == '-':
                 continue
-            texts1.append(eg['sentence1'])
-            texts2.append(eg['sentence2'])
-            labels.append(LABELS[label])
+            if (eg['sentence1'].strip() != '' and eg['sentence2'].strip() != '' ):
+            # print("sentence 1", eg['sentence1'])
+            # print("sentence 2", eg['sentence2'])
+            # print("-"*50)
+
+                texts1.append(eg['sentence1'])
+                texts2.append(eg['sentence2'])
+                labels.append(LABELS[label])
     return texts1, texts2, to_categorical(numpy.asarray(labels, dtype='int32'))
 
 
@@ -118,7 +158,7 @@ def main(mode, train_loc, dev_loc,
         learn_rate=0.001,
         batch_size=100,
         nr_epoch=5):
-    shape = (max_length, nr_hidden, 3)
+    shape = (max_length, nr_hidden, 2)
     settings = {
         'lr': learn_rate,
         'dropout': dropout,

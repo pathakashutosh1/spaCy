@@ -13,10 +13,14 @@ except ImportError:
 class KerasSimilarityShim(object):
     @classmethod
     def load(cls, path, nlp, get_features=None, max_length=100):
+        # print("get features")
+        # print (get_features)
         if get_features is None:
             get_features = get_word_ids
+        print("Model path " + str(path))
         with (path / 'config.json').open() as file_:
             model = model_from_json(file_.read())
+            # print ("HUH")
         with (path / 'model').open('rb') as file_:
             weights = pickle.load(file_)
         embeddings = get_embeddings(nlp.vocab)
@@ -33,22 +37,39 @@ class KerasSimilarityShim(object):
         doc.user_span_hooks['similarity'] = self.predict
 
     def predict(self, doc1, doc2):
+        # print ("doc 1 : " + str(doc1))
+        # print(self.get_features)
         x1 = self.get_features([doc1], max_length=self.max_length, tree_truncate=True)
+
         x2 = self.get_features([doc2], max_length=self.max_length, tree_truncate=True)
         scores = self.model.predict([x1, x2])
         return scores[0]
 
 
 def get_embeddings(vocab, nr_unk=100):
+
+    pos_array = ['ADJ', 'ADP', 'ADV', 'AUX', 'CONJ','DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON','PROPN', 'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X','CCONJ']
+    pos_dict = {value:key for key,value in enumerate(pos_array)}
+    
     nr_vector = max(lex.rank for lex in vocab) + 1
-    vectors = numpy.zeros((nr_vector+nr_unk+2, vocab.vectors_length), dtype='float32')
+
+    vectors = numpy.zeros((nr_vector+nr_unk+2 + len(pos_array), vocab.vectors_length), dtype='float32')
+    # print("vocab vector length ", vocab.vectors_length)
     for lex in vocab:
         if lex.has_vector:
             vectors[lex.rank+1] = lex.vector / lex.vector_norm
+
+    for item in pos_dict:
+        vectors[nr_vector + nr_unk + 2 + pos_dict[item]][pos_dict[item]] = 1 
+
     return vectors
 
 
 def get_word_ids(docs, rnn_encode=False, tree_truncate=False, max_length=100, nr_unk=100):
+    pos_array = ['ADJ', 'ADP', 'ADV', 'AUX', 'CONJ','DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON','PROPN', 'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X','CCONJ']
+    pos_dict = {value:key for key,value in enumerate(pos_array)}
+    nr_vector = 742225
+
     Xs = numpy.zeros((len(docs), max_length), dtype='int32')
     for i, doc in enumerate(docs):
         if tree_truncate:
@@ -66,24 +87,26 @@ def get_word_ids(docs, rnn_encode=False, tree_truncate=False, max_length=100, nr
             if tree_truncate:
                 queue.extend(list(word.lefts))
                 queue.extend(list(word.rights))
-        words.sort()
-        for j, token in enumerate(words):
+        # words.sort()
+        j = 0
+        for token in words:
             if token.has_vector:
                 Xs[i, j] = token.rank+1
             else:
                 Xs[i, j] = (token.shape % (nr_unk-1))+2
-            j += 1
+            Xs[i, j+1] = nr_vector + nr_unk + 2 + pos_dict[token.pos_]
+            j += 2
             if j >= max_length:
                 break
         else:
-            Xs[i, len(words)] = 1
+            Xs[i, 2*len(words)] = 1
     return Xs
 
 
-def create_similarity_pipeline(nlp, max_length=100):
+def create_similarity_pipeline(nlp, max_length=200):
     return [
         nlp.tagger,
         nlp.entity,
         nlp.parser,
-        KerasSimilarityShim.load(nlp.path / 'similarity', nlp, max_length)
+        KerasSimilarityShim.load(nlp.path / 'similarity', nlp, max_length=max_length)
     ]
