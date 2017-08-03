@@ -178,8 +178,8 @@ class _Comparison(object):
 
     def __call__(self, sent, align, **kwargs):
         result = self.model(merge([sent, align], mode='concat')) # Shape: (i, n)
-        avged = GlobalAveragePooling1D()(result, mask=self.words)
-        maxed = GlobalMaxPooling1D()(result, mask=self.words)
+        avged = GlobalAveragePooling1D()(result)#, mask=self.words)
+        maxed = GlobalMaxPooling1D()(result)#, mask=self.words)
         merged = merge([avged, maxed])
         result = BatchNormalization()(merged)
         return result
