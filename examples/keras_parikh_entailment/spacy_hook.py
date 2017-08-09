@@ -51,27 +51,38 @@ def get_embeddings(vocab, nr_unk=100):
     pos_array = ['ADJ', 'ADP', 'ADV', 'AUX', 'CONJ','DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON','PROPN', 'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X','CCONJ']
     pos_dict = {value:key for key,value in enumerate(pos_array)}
     
+    styling_feature_array = ['is_totally_bold_false','is_totally_bold_true','is_totally_italic_false','is_totally_italic_true','has_real_bullet_symbol_false','has_real_bullet_symbol_true']
+    styling_feature_dict = {value:key for key,value in enumerate(styling_feature_array)}
+    
     nr_vector = max(lex.rank for lex in vocab) + 1
 
-    vectors = numpy.zeros((nr_vector+nr_unk+2 + len(pos_array), vocab.vectors_length), dtype='float32')
-    # print("vocab vector length ", vocab.vectors_length)
+    vectors = numpy.zeros((nr_vector+nr_unk+2 + len(pos_array) + len(styling_feature_array) + 101, vocab.vectors_length), dtype='float32')
+
     for lex in vocab:
         if lex.has_vector:
             vectors[lex.rank+1] = lex.vector / lex.vector_norm
 
     for item in pos_dict:
-        vectors[nr_vector + nr_unk + 2 + pos_dict[item]][pos_dict[item]] = 1 
+        vectors[nr_vector + nr_unk + 2 + pos_dict[item]][pos_dict[item]] = 1
+    for item in styling_feature_dict:
+        vectors[nr_vector + nr_unk + 2 + len(pos_array)+ styling_feature_dict[item]][styling_feature_dict[item]+100] = 1
+    for i in range(101):
+        vectors[nr_vector + nr_unk + 2 + len(pos_array)+len(styling_feature_array)+i][150+i] = 1
 
     return vectors
 
 
-def get_word_ids(docs, rnn_encode=False, tree_truncate=False, max_length=100, nr_unk=100):
+def get_word_ids(docs, styling_array, TWP, rnn_encode=False, tree_truncate=False, max_length=100, nr_unk=100):
     pos_array = ['ADJ', 'ADP', 'ADV', 'AUX', 'CONJ','DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON','PROPN', 'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X','CCONJ']
     pos_dict = {value:key for key,value in enumerate(pos_array)}
     nr_vector = 742225
+    styling_feature_array = ['is_totally_bold_false','is_totally_bold_true','is_totally_italic_false','is_totally_italic_true','has_real_bullet_symbol_false','has_real_bullet_symbol_true']
+    styling_feature_dict = {value:key for key,value in enumerate(styling_feature_array)}
 
     Xs = numpy.zeros((len(docs), max_length), dtype='int32')
     for i, doc in enumerate(docs):
+        ar = styling_array[i]
+        twp = TWP[i]
         if tree_truncate:
             if isinstance(doc, Span):
                 queue = [doc.root]
@@ -100,10 +111,14 @@ def get_word_ids(docs, rnn_encode=False, tree_truncate=False, max_length=100, nr
                 break
         else:
             Xs[i, 2*len(words)] = 1
+            for k,item in enumerate(ar):
+                if item:
+                    Xs[i,max_length-1-k] = nr_vector + nr_unk + 2 + len(pos_array) + k 
+            Xs[i,max_length-1-len(styling_feature_array)] = nr_vector + nr_unk + 2 + len(pos_array)+len(styling_feature_array) + twp
     return Xs
 
 
-def create_similarity_pipeline(nlp, max_length=200):
+def create_similarity_pipeline(nlp, max_length=306):
     return [
         nlp.tagger,
         nlp.entity,

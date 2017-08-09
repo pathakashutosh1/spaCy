@@ -23,8 +23,8 @@ csv_path = '/home/ashutosh/trial/data/compare/compare_2.csv'
 csv_handle = file(csv_path, 'w')
 
 def train(train_loc, dev_loc, shape, settings):
-    train_texts1, train_texts2, train_labels = read_snli(train_loc)
-    dev_texts1, dev_texts2, dev_labels = read_snli(dev_loc)
+    train_texts1, train_texts2, train_labels , train_styling_arrays_1,train_styling_arrays_2,train_TWPs_1,train_TWPs_2 = read_snli(train_loc)
+    dev_texts1, dev_texts2, dev_labels,dev_styling_arrays_1,dev_styling_arrays_2,dev_TWPs_1,dev_TWPs_2 = read_snli(dev_loc)
 
     print("Loading spaCy")
     nlp = spacy.load('en')
@@ -34,8 +34,13 @@ def train(train_loc, dev_loc, shape, settings):
     model = build_model(get_embeddings(nlp.vocab), shape, settings)
     print("Processing texts...")
     Xs = []
-    for texts in (train_texts1, train_texts2, dev_texts1, dev_texts2):
+    for texts,styling_array,TWP in ((train_texts1,train_styling_arrays_1,train_TWPs_1), 
+                    (train_texts2,train_styling_arrays_2,train_TWPs_2), 
+                    (dev_texts1,dev_styling_arrays_1,dev_TWPs_1),
+                     (dev_texts2,dev_styling_arrays_2,dev_TWPs_2)):
         Xs.append(get_word_ids(list(nlp.pipe(texts, n_threads=20, batch_size=20000)),
+                        styling_array,
+                        TWP,
                          max_length=shape[0],
                          rnn_encode=settings['gru_encode'],
                          tree_truncate=settings['tree_truncate']))
@@ -119,6 +124,10 @@ def read_snli(path):
     texts1 = []
     texts2 = []
     labels = []
+    styling_arrays_1 = []
+    styling_arrays_2 = []
+    TWPs_1 = []
+    TWPs_2 = []
     with path.open() as file_:
         for line in file_:
             eg = json.loads(line)
@@ -126,14 +135,28 @@ def read_snli(path):
             if label == '-':
                 continue
             if (eg['sentence1'].strip() != '' and eg['sentence2'].strip() != '' ):
-            # print("sentence 1", eg['sentence1'])
-            # print("sentence 2", eg['sentence2'])
-            # print("-"*50)
-
+                temp = [0,0,0,0,0,0]
+                if eg['curr_is_totally_bold']:
+                    temp[1] = 1
+                if eg['curr_is_totally_italic']:
+                    temp[3] = 1
+                if eg['curr_has_bullet_symbol']:
+                    temp[5] = 1
+                styling_arrays_1.append(temp)
+                temp = [0,0,0,0,0,0]
+                if eg['prev_is_totally_bold']:
+                    temp[1] = 1
+                if eg['prev_is_totally_italic']:
+                    temp[3] = 1
+                if eg['prev_has_bullet_symbol']:
+                    temp[5] = 1
+                styling_arrays_2.append(temp)
+                TWPs_1.append(eg['curr_title_case_word_percent'])
+                TWPs_2.append(eg['prev_title_case_word_percent'])
                 texts1.append(eg['sentence1'])
                 texts2.append(eg['sentence2'])
                 labels.append(LABELS[label])
-    return texts1, texts2, to_categorical(numpy.asarray(labels, dtype='int32'))
+    return texts1, texts2, to_categorical(numpy.asarray(labels, dtype='int32')), styling_arrays_1,styling_arrays_2,TWPs_1,TWPs_2
 
 
 @plac.annotations(
