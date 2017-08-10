@@ -33,15 +33,18 @@ class KerasSimilarityShim(object):
         self.max_length = max_length
 
     def __call__(self, doc):
+    # def __call__(self, doc, doc1_style, doc2_style, doc1_TWP, doc2_TWP):
         doc.user_hooks['similarity'] = self.predict
         doc.user_span_hooks['similarity'] = self.predict
 
-    def predict(self, doc1, doc2):
+    def predict(self, doc1, array_doc):
+        doc2, doc1_style, doc2_style, doc1_TWP, doc2_TWP = array_doc
+        # print("type ", type(doc2), type(doc1_style), type(doc2_style), type(doc1_TWP), type(doc2_TWP))
         # print ("doc 1 : " + str(doc1))
         # print(self.get_features)
-        x1 = self.get_features([doc1], max_length=self.max_length, tree_truncate=True)
+        x1 = self.get_features([doc1], [doc1_style], [doc1_TWP], max_length=self.max_length, tree_truncate=True)
 
-        x2 = self.get_features([doc2], max_length=self.max_length, tree_truncate=True)
+        x2 = self.get_features([doc2], [doc2_style], [doc2_TWP], max_length=self.max_length, tree_truncate=True)
         scores = self.model.predict([x1, x2])
         return scores[0]
 
@@ -118,7 +121,7 @@ def get_word_ids(docs, styling_array, TWP, rnn_encode=False, tree_truncate=False
     return Xs
 
 
-def create_similarity_pipeline(nlp, max_length=306):
+def create_similarity_pipeline(nlp, max_length=210):
     return [
         nlp.tagger,
         nlp.entity,
