@@ -145,18 +145,30 @@ def read_snli(path):
                 temp = [0,0,0,0,0,0]
                 if eg['curr_is_totally_bold']:
                     temp[1] = 1
+                else:
+                    temp[0] = 1
                 if eg['curr_is_totally_italic']:
                     temp[3] = 1
+                else:
+                    temp[2] = 1
                 if eg['curr_has_bullet_symbol']:
                     temp[5] = 1
+                else:
+                    temp[4] = 1
                 styling_arrays_1.append(temp)
                 temp = [0,0,0,0,0,0]
                 if eg['prev_is_totally_bold']:
                     temp[1] = 1
+                else:
+                    temp[0] = 1
                 if eg['prev_is_totally_italic']:
                     temp[3] = 1
+                else:
+                    temp[2] = 1
                 if eg['prev_has_bullet_symbol']:
                     temp[5] = 1
+                else:
+                    temp[4] = 1
                 styling_arrays_2.append(temp)
                 TWPs_1.append(eg['curr_title_case_word_percent'])
                 TWPs_2.append(eg['prev_title_case_word_percent'])
