@@ -14,13 +14,14 @@ from spacy_hook import get_embeddings, get_word_ids
 from spacy_hook import create_similarity_pipeline
 
 from keras_decomposable_attention import build_model
-
+import en_core_web_sm
+import en_vectors_web_lg
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 
-csv_path = '/home/ashutosh/trial/data/compare/compare_2.csv'
+csv_path = '/home/ankesh/data/compare.csv'
 csv_handle = file(csv_path, 'w')
 
 def train(train_loc, dev_loc, shape, settings):
@@ -28,13 +29,28 @@ def train(train_loc, dev_loc, shape, settings):
     dev_texts1, dev_texts2, dev_labels,dev_styling_arrays_1,dev_styling_arrays_2,dev_TWPs_1,dev_TWPs_2 = read_snli(dev_loc)
 
     print("Loading spaCy")
-    nlp = spacy.load('en')
-    assert nlp.path is not None
+    nlp = en_core_web_sm.load()
+    # en_vectors_web_lg.load(vocab=nlp.vocab)
+    path = '/home/ankesh/div_merging_models/alpha1/'
     print("Compiling network")
     # sense = sense2vec.load()
     model = build_model(get_embeddings(nlp.vocab), shape, settings)
     print("Processing texts...")
     Xs = []
+    # train_texts1 = train_texts1[:1000]
+    # train_styling_arrays_1 = train_styling_arrays_1[:10]
+    # train_TWPs_1 = train_TWPs_1[:10]
+    # train_texts2 = train_texts2[:10]
+    # train_styling_arrays_2 = train_styling_arrays_2[:10]
+    # train_TWPs_2 = train_TWPs_2[:10]
+    # dev_texts1 = dev_texts1[:1]
+    # dev_styling_arrays_1 = dev_styling_arrays_1[:1]
+    # dev_TWPs_1 = dev_TWPs_1[:1]
+    # dev_texts2 = dev_texts2[:1]
+    # dev_styling_arrays_2 = dev_styling_arrays_2[:1]
+    # dev_TWPs_2 = dev_TWPs_2[:1]
+    # print (train_texts1[0])
+    # print (train_texts2[0])
     for texts,styling_array,TWP in ((train_texts1,train_styling_arrays_1,train_TWPs_1), 
                     (train_texts2,train_styling_arrays_2,train_TWPs_2), 
                     (dev_texts1,dev_styling_arrays_1,dev_TWPs_1),
@@ -46,8 +62,11 @@ def train(train_loc, dev_loc, shape, settings):
                          rnn_encode=settings['gru_encode'],
                          tree_truncate=settings['tree_truncate']))
     train_X1, train_X2, dev_X1, dev_X2 = Xs
-    print ("shape of train X1", train_X1.shape)
-    print("+"*40)
+    # print (train_X1[0])
+    # print ('-'*10)
+    # print (train_X2[0])
+    # print ("shape of train X1", train_X1.shape)
+    # print("+"*40)
     print(settings)
     model.fit(
         [train_X1, train_X2],
@@ -55,26 +74,29 @@ def train(train_loc, dev_loc, shape, settings):
         validation_data=([dev_X1, dev_X2], dev_labels),
         nb_epoch=settings['nr_epoch'],
         batch_size=settings['batch_size'])
-    if not (nlp.path / 'similarity').exists():
-        (nlp.path / 'similarity').mkdir()
-    print("Saving to", nlp.path / 'similarity')
+    # if not (nlp.path / 'similarity').exists():
+    #     (nlp.path / 'similarity').mkdir()
+    print("Saving to", path + 'similarity')
     weights = model.get_weights()
-    with (nlp.path / 'similarity' / 'model').open('wb') as file_:
+    with open(path + 'similarity/' + 'model','wb') as file_:
         pickle.dump(weights[1:], file_)
-    with (nlp.path / 'similarity' / 'config.json').open('wb') as file_:
+    with open(path + 'similarity/' + 'config.json','wb') as file_:
         file_.write(model.to_json())
 
 
 def evaluate(dev_loc):
     dev_texts1, dev_texts2, dev_labels,dev_styling_arrays_1,dev_styling_arrays_2,dev_TWPs_1,dev_TWPs_2 = read_snli(dev_loc)
-    nlp = spacy.load('en',
-            create_pipeline=create_similarity_pipeline)
+    # nlp = spacy.load('en',
+    #         create_pipeline=create_similarity_pipeline)
+    nlp = en_core_web_sm.load()
+    nlp.pipeline.append(create_similarity_pipeline)
     # nlp = spacy.load('en')
     total = 0.
     correct = 0.
     label_array = []
     predicted_array = []
-    print ("Path NLP",nlp.path)
+    path = '/home/ankesh/'
+    # print ("Path NLP",nlp.path)
     print(','.join(["text1", "text2", "Predicted Label" , "Gold Label"]), file=csv_handle)
     for i,(text1, text2, label) in tqdm.tqdm(enumerate(zip(dev_texts1, dev_texts2 , dev_labels))):
         dev1_style = dev_styling_arrays_1[i]
@@ -126,7 +148,7 @@ def demo():
 
 
 # LABELS = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
-LABELS = {True: 1, False : 0}
+LABELS = {True: 1, False : 0,'TRUE':1,'FALSE':0}
 def read_snli(path):
     texts1 = []
     texts2 = []
@@ -136,45 +158,55 @@ def read_snli(path):
     TWPs_1 = []
     TWPs_2 = []
     with path.open() as file_:
-        for line in file_:
+        for i,line in enumerate(file_):
             eg = json.loads(line)
             label = eg['gold_label']
             if label == '-':
                 continue
             if (eg['sentence1'].strip() != '' and eg['sentence2'].strip() != '' ):
                 temp = [0,0,0,0,0,0]
-                if eg['curr_is_totally_bold']:
+                if eg['curr_is_totally_bold']=='TRUE':
                     temp[1] = 1
                 else:
                     temp[0] = 1
-                if eg['curr_is_totally_italic']:
+                if eg['curr_is_totally_italic']=='TRUE':
                     temp[3] = 1
                 else:
                     temp[2] = 1
-                if eg['curr_has_bullet_symbol']:
+                if eg['curr_has_bullet_symbol']=='TRUE':
                     temp[5] = 1
                 else:
                     temp[4] = 1
                 styling_arrays_1.append(temp)
                 temp = [0,0,0,0,0,0]
-                if eg['prev_is_totally_bold']:
+                if eg['prev_is_totally_bold']=='TRUE':
                     temp[1] = 1
                 else:
                     temp[0] = 1
-                if eg['prev_is_totally_italic']:
+                if eg['prev_is_totally_italic']=='TRUE':
                     temp[3] = 1
                 else:
                     temp[2] = 1
-                if eg['prev_has_bullet_symbol']:
+                if eg['prev_has_bullet_symbol']=='TRUE':
                     temp[5] = 1
                 else:
                     temp[4] = 1
                 styling_arrays_2.append(temp)
-                TWPs_1.append(eg['curr_title_case_word_percent'])
-                TWPs_2.append(eg['prev_title_case_word_percent'])
-                texts1.append(eg['sentence1'])
+                TWPs_1.append(int(eg['curr_title_case_word_percent']))
+                TWPs_2.append(int(eg['prev_title_case_word_percent']))
+                texts1.append(eg['sentence1'])  # would lowering help
                 texts2.append(eg['sentence2'])
                 labels.append(LABELS[label])
+            # print (texts1)
+            # print (texts2)
+            # print (labels)
+            # print (to_categorical(numpy.asarray(labels, dtype='int32')))
+            # print (styling_arrays_1)
+            # print (styling_arrays_2)
+            # print (TWPs_1)
+            # print (TWPs_2)
+            # if i>1000:
+            #     break
     return texts1, texts2, to_categorical(numpy.asarray(labels, dtype='int32')), styling_arrays_1,styling_arrays_2,TWPs_1,TWPs_2
 
 
