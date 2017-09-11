@@ -37,6 +37,7 @@ class KerasSimilarityShim(object):
         doc.user_hooks['similarity'] = self.predict
         doc.user_span_hooks['similarity'] = self.predict
         doc.user_token_hooks['similarity'] = self.predict
+        return doc
 
 
     def predict(self, doc1, array_doc):
@@ -80,7 +81,7 @@ def get_embeddings(vocab, nr_unk=100):
 def get_word_ids(docs, styling_array, TWP, rnn_encode=False, tree_truncate=False, max_length=100, nr_unk=100):
     pos_array = ['ADJ', 'ADP', 'ADV', 'AUX', 'CONJ','DET', 'INTJ', 'NOUN', 'NUM', 'PART', 'PRON','PROPN', 'PUNCT', 'SCONJ', 'SYM', 'VERB', 'X','CCONJ']
     pos_dict = {value:key for key,value in enumerate(pos_array)}
-    nr_vector =  57866 #57392 #1070992
+    nr_vector = 57392 #1070992 vectors large #57866 alpha1
     styling_feature_array = ['is_totally_bold_false','is_totally_bold_true','is_totally_italic_false','is_totally_italic_true','has_real_bullet_symbol_false','has_real_bullet_symbol_true']
     styling_feature_dict = {value:key for key,value in enumerate(styling_feature_array)}
 
@@ -108,7 +109,7 @@ def get_word_ids(docs, styling_array, TWP, rnn_encode=False, tree_truncate=False
         # print 'words: ',words
         for token in words:
             if token.has_vector:
-                Xs[i, j] = token.rank+1
+                Xs[i, j] = 0 #token.rank+1
                 # print token.orth_,token.rank+1
             else:
                 Xs[i, j] = (token.shape % (nr_unk-1))+2
@@ -127,7 +128,7 @@ def get_word_ids(docs, styling_array, TWP, rnn_encode=False, tree_truncate=False
 
 
 def create_similarity_pipeline(nlp, max_length=210):
-    return KerasSimilarityShim.load('/home/ankesh/' + 'similarity/', nlp, max_length=max_length)
+    return KerasSimilarityShim.load('/home/ankesh/div_merging_models/alpha1/' + 'similarity/', nlp, max_length=max_length)
     # return [
     #     nlp.tensorizer,
     #     nlp.tagger,

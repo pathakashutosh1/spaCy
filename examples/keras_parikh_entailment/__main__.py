@@ -8,6 +8,7 @@ import numpy
 from keras.utils.np_utils import to_categorical
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 import tqdm
+from keras.models import model_from_json
 # import sense2vec
 
 from spacy_hook import get_embeddings, get_word_ids
@@ -83,22 +84,39 @@ def train(train_loc, dev_loc, shape, settings):
     with open(path + 'similarity/' + 'config.json','wb') as file_:
         file_.write(model.to_json())
 
+def load_model(path,nlp):
+    with open(path + 'config.json') as file_:
+        model = model_from_json(file_.read())
+        # print ("HUH")
+    with open(path + 'model','rb') as file_:
+        weights = pickle.load(file_)
+    embeddings = get_embeddings(nlp.vocab)
+    model.set_weights([embeddings] + weights)
+    return model
+
+def predict_similarity(doc1,doc2, doc1_style, doc2_style, doc1_TWP, doc2_TWP,model):
+    x1 = get_word_ids([doc1], [doc1_style], [doc1_TWP], max_length=210, tree_truncate=False)
+
+    x2 = get_word_ids([doc2], [doc2_style], [doc2_TWP], max_length=210, tree_truncate=False)
+    scores = model.predict([x1, x2])
+    return scores[0]
 
 def evaluate(dev_loc):
     dev_texts1, dev_texts2, dev_labels,dev_styling_arrays_1,dev_styling_arrays_2,dev_TWPs_1,dev_TWPs_2 = read_snli(dev_loc)
     # nlp = spacy.load('en',
     #         create_pipeline=create_similarity_pipeline)
     nlp = en_core_web_sm.load()
-    nlp.pipeline.append(create_similarity_pipeline)
+    model = load_model('/home/ankesh/div_merging_models/alpha1/similarity/',nlp)
+    # nlp.pipeline.append(create_similarity_pipeline)
     # nlp = spacy.load('en')
     total = 0.
     correct = 0.
     label_array = []
     predicted_array = []
-    path = '/home/ankesh/'
+    path = '/home/ankesh/div_merging_models/alpha1/'
     # print ("Path NLP",nlp.path)
     print(','.join(["text1", "text2", "Predicted Label" , "Gold Label"]), file=csv_handle)
-    for i,(text1, text2, label) in tqdm.tqdm(enumerate(zip(dev_texts1, dev_texts2 , dev_labels))):
+    for i,(text1, text2, label) in tqdm.tqdm(enumerate(zip(dev_texts1, dev_texts2 , dev_labels)),total=len(dev_texts1)):
         dev1_style = dev_styling_arrays_1[i]
         dev2_style = dev_styling_arrays_2[i]
         dev1_TWP = dev_TWPs_1[i]
@@ -108,7 +126,8 @@ def evaluate(dev_loc):
 
         # print ("time")
         # now = time.time()
-        sim = doc1.similarity([doc2, dev1_style, dev2_style, dev1_TWP, dev2_TWP])
+        sim = predict_similarity(doc1,doc2, dev1_style, dev2_style, dev1_TWP, dev2_TWP,model)
+        # sim = doc1.similarity([doc2, dev1_style, dev2_style, dev1_TWP, dev2_TWP])
         # print(time.time()-now)
         # print ("SIM")
         # print(sim)
